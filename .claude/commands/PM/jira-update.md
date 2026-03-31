@@ -31,7 +31,7 @@ This command connects to Jira and gives you a live update. Here's what you can d
 Cards with status: In Queue, Ready, In Progress, In Design, In Review, Review, QA, In QA, UAT, Blocked — basically anything active that hasn't reached Done or Deployed yet.
 
 **What counts as "unacknowledged mention"?**
-A ticket where someone tagged you in a comment, and the last comment on that ticket is NOT from you — meaning you haven't replied yet. This checks all tickets across the board, not just ones assigned to you.
+A ticket where someone tagged the person in a comment, AND the person has NOT posted any comment after that tag — whether a direct reply or a separate comment. If the person has commented anything after being tagged, it is considered acknowledged.
 
 ---
 
@@ -65,20 +65,35 @@ If the input is ambiguous (one word that could be a name or a project), try reso
 
 ---
 
+### HOW TO EVALUATE UNACKNOWLEDGED MENTIONS (applies to all modes)
+
+For every ticket where the person has been mentioned in a comment, apply this logic:
+
+1. Fetch all comments on the ticket in chronological order
+2. Find the **timestamp of the most recent comment that mentions the person** (by their account ID)
+3. Check if the person has written **any comment after that timestamp** (a direct reply or a new comment — either counts)
+4. If **yes** → the person has acknowledged it → **exclude from results**
+5. If **no** → the person has not responded since being tagged → **include as unacknowledged**
+
+> **Example:** Person was tagged on Mar 26 at 11am. If their last comment on the ticket was on Mar 26 at 5pm — acknowledged ✅. If their last comment was on Mar 25 (before the tag) — unacknowledged ❌.
+
+This must be evaluated per ticket, not just by looking at who wrote the last comment overall.
+
+---
+
 ### MY CHECK (no input)
 
 **Part A — Assigned Cards**
 Search for issues where:
 - Assignee = current user's account ID
 - Status IN: In Queue, Ready, In Progress, In Design, In Review, Review, QA, In QA, UAT, Blocked
-  *(i.e. active statuses between Ready and Done — exclude Backlog, Cancelled, Done, Deployed, Closed, Released, Resolved)*
+  *(exclude Backlog, Cancelled, Done, Deployed, Closed, Released, Resolved)*
 
 **Part B — Unacknowledged Mentions**
 Search for ALL issues (across all projects) where:
-- A comment contains a mention of the current user's account ID
-- The ticket status is NOT Done, Deployed, Cancelled, Closed, Released, Resolved
-- The last comment on the ticket was NOT written by the current user
-  *(This means someone is waiting for their reply — regardless of who the ticket is assigned to)*
+- A comment mentions the current user's account ID
+- Ticket status is NOT Done, Deployed, Cancelled, Closed, Released, Resolved
+- Apply the **Unacknowledged Mentions logic** above to determine if still pending
 
 **Output:**
 Greet the user by first name.
@@ -88,7 +103,6 @@ For each: [ticket key with link] · summary · status · project · priority · 
 
 💬 **Needs My Reply (X items)**
 For each: [ticket key with link] · summary · project · who tagged me · when they tagged me
-*(Include tickets assigned to others where the user has been mentioned)*
 
 > Summary: "You have X pending cards and Y unacknowledged mentions. Most urgent: [ticket key]."
 
@@ -107,7 +121,7 @@ Search for issues where:
 Search for ALL issues (across all projects) where:
 - A comment mentions this person's account ID
 - Ticket status is NOT Done, Deployed, Cancelled, Closed, Released, Resolved
-- The last comment was NOT written by this person
+- Apply the **Unacknowledged Mentions logic** above
 
 **Output:**
 
@@ -116,7 +130,6 @@ For each: [ticket key with link] · summary · status · project · priority · 
 
 💬 **[Person Name]'s Unacknowledged Mentions (X items)**
 For each: [ticket key with link] · summary · project · assignee · who tagged them · when
-*(Include tickets they don't own but have been tagged on)*
 
 > Summary: "[Person Name] has X pending cards and Y unacknowledged mentions."
 
@@ -161,8 +174,8 @@ Search for issues where:
 - Project = resolved project key
 - A comment mentions this person's account ID
 - Ticket status is NOT Done, Deployed, Cancelled, Closed, Released, Resolved
-- The last comment was NOT written by this person
-- *(Include tickets on this board assigned to anyone, not just this person)*
+- Apply the **Unacknowledged Mentions logic** above
+- Include tickets assigned to anyone on this board, not just this person
 
 **Output:**
 
@@ -171,7 +184,6 @@ For each: [ticket key with link] · summary · status · priority · last update
 
 💬 **[Person Name]'s Unacknowledged Mentions on [Project Name] (X items)**
 For each: [ticket key with link] · summary · assignee · who tagged them · when
-*(This is where CC-4313-style tickets get caught — assigned to someone else, but this person was tagged)*
 
 > Summary: "[Person Name] has X pending cards and Y unacknowledged mentions on [Project Name]."
 
@@ -182,6 +194,7 @@ For each: [ticket key with link] · summary · assignee · who tagged them · wh
 - Always use Atlassian MCP — never hardcode IDs, names, or project keys
 - Always include direct ticket links: https://7edge.atlassian.net/browse/[KEY]
 - Unacknowledged mentions must search ALL tickets on the board/project, not just ones assigned to the person
+- Always apply the Unacknowledged Mentions logic per ticket — do not just check the last overall comment
 - If a person or project cannot be resolved, say so clearly and ask for clarification
 - Keep output concise and actionable
 - If no results found for any section, say "✅ All clear — nothing pending here"
